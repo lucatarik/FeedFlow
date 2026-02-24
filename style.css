@@ -52,6 +52,7 @@ body {
 /* ─── Sidebar ────────────────────────────────────────────────────────────── */
 #sidebar {
   width: var(--sidebar-w);
+  height: 100vh;            /* anchor: gives flex children a real height to work with */
   background: var(--bg2);
   border-right: 1px solid var(--border);
   display: flex;
@@ -147,7 +148,7 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 6px 10px 4px;
-  min-height: 0;           /* THE key for flex+scroll to work */
+  min-height: 0;           /* required: flex children ignore overflow without this */
   -webkit-overflow-scrolling: touch;
 }
 
@@ -264,7 +265,7 @@ body {
   border-top: 1px solid var(--border);
   display: flex;
   gap: 6px;
-  flex-shrink: 0;          /* never compress */
+  flex-shrink: 0;
 }
 
 .sidebar-footer-btn {
