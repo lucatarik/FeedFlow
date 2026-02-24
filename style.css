@@ -62,6 +62,7 @@ body {
   overflow: hidden;
   z-index: 100;
 }
+
 #sidebar-feeds-section
 {
   flex: 1 1 0%;
@@ -1238,3 +1239,15 @@ body {
 .discover-btn-header:hover { background: var(--gold); color: #000; }
 
 /* ─── Mobile discover override handled in main @media block above ────────── */
+
+/* ─── Reset App button ───────────────────────────────────────────────────────*/
+.reset-app-btn {
+  color: var(--red) !important;
+  border-color: var(--red) !important;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+.reset-app-btn:hover {
+  background: color-mix(in srgb, var(--red) 12%, transparent) !important;
+  opacity: 1;
+}

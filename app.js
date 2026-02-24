@@ -350,9 +350,30 @@ function saveImageCache() {
 }
 setInterval(saveImageCache, 8000);
 
+// ─── Image Fetching Pipeline ──────────────────────────────────────────────────
 // OG image fetching
 const ogQueue = new Set();
 let ogWorkerActive = false;
+
+// Italian + English stopwords for keyword extraction
+const STOPWORDS = new Set([
+  'il','lo','la','i','gli','le','un','uno','una','di','da','in','con','su','per','tra','fra',
+  'e','o','ma','se','che','chi','cui','non','come','quando','dove','perché','anche','più',
+  'the','a','an','of','to','in','for','on','with','at','by','from','is','are','was','were',
+  'be','been','being','have','has','had','do','does','did','will','would','could','should',
+  'and','or','but','not','this','that','these','those','it','its','as','into','about','up',
+  'new','latest','how','why','what','top','best','after','before','now','than','just','your',
+]);
+
+function extractKeywords(title, maxWords = 4) {
+  return title
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')           // strip punctuation
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !STOPWORDS.has(w))  // remove stopwords + short words
+    .slice(0, maxWords)
+    .join(' ');
+}
 
 async function fetchOgImage(url) {
   if (!url) return '';
@@ -360,8 +381,11 @@ async function fetchOgImage(url) {
   try {
     const html = await fetchWithProxy(url, 0);
     const ogImg = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']{10,})["']/i)
+               || html.match(/<meta[^>]+itemprop=["']image["'][^>]+content=["']([^"']{10,})["']/i)
                || html.match(/<meta[^>]+content=["']([^"']{10,})["'][^>]+property=["']og:image["']/i);
     const twImg = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']{10,})["']/i)
+               || html.match(/<meta[^>]+name=["']twitter:image:src["'][^>]+content=["']([^"']{10,})["']/i)
+               || html.match(/<meta[^>]+name=["']EdImage["'][^>]+content=["']([^"']{10,})["']/i)
                || html.match(/<meta[^>]+content=["']([^"']{10,})["'][^>]+name=["']twitter:image["']/i);
     const raw = ogImg?.[1] || twImg?.[1] || '';
     const img = raw.replace(/&amp;/g, '&').trim();
@@ -375,31 +399,93 @@ async function fetchOgImage(url) {
   }
 }
 
+// Wikipedia pageimages API — free, no key, CORS-friendly
+async function fetchWikipediaImage(keywords) {
+  if (!keywords) return '';
+  try {
+    const q = encodeURIComponent(keywords);
+    const res = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${q}&gsrlimit=3&prop=pageimages&piprop=thumbnail&pithumbsize=600&format=json&origin=*`,
+      { signal: AbortSignal.timeout(6000) }
+    );
+    const data = await res.json();
+    const pages = Object.values(data?.query?.pages || {});
+    for (const page of pages) {
+      if (page?.thumbnail?.source) return page.thumbnail.source;
+    }
+    return '';
+  } catch { return ''; }
+}
+
+// Openverse API — Creative Commons images, no auth needed for basic use
+async function fetchOpenverseImage(keywords) {
+  if (!keywords) return '';
+  try {
+    const q = encodeURIComponent(keywords);
+    const res = await fetch(
+      `https://api.openverse.org/v1/images/?q=${q}&page_size=3&license_type=commercial`,
+      { signal: AbortSignal.timeout(6000) }
+    );
+    const data = await res.json();
+    const img = data?.results?.[0]?.url || '';
+    // Prefer thumbnail for speed
+    return data?.results?.[0]?.thumbnail || img;
+  } catch { return ''; }
+}
+
+// Full pipeline: RSS → OG → Wikipedia → Openverse
+async function resolveImage(article) {
+  // 1. Already has image from RSS feed
+  if (article.image) return article.image;
+
+  // 2. Try OG/Twitter meta from article page
+  if (article.link) {
+    const og = await fetchOgImage(article.link);
+    if (og) return og;
+  }
+
+  // 3. Extract keywords and search Wikipedia
+  const keywords = extractKeywords(article.title);
+  if (keywords) {
+    const wiki = await fetchWikipediaImage(keywords);
+    if (wiki) return wiki;
+
+    // 4. Last resort: Openverse (CC images)
+    const ov = await fetchOpenverseImage(keywords);
+    if (ov) return ov;
+  }
+
+  return '';
+}
+
 async function processOgQueue() {
   if (ogWorkerActive || ogQueue.size === 0) return;
   ogWorkerActive = true;
-  for (const articleId of [...ogQueue].slice(0, 10)) {
+  for (const articleId of [...ogQueue].slice(0, 8)) {
     ogQueue.delete(articleId);
     const article = state.articles.find(a => a.id === articleId);
-    if (!article || article.image || !article.link) continue;
-    const img = await fetchOgImage(article.link);
+    if (!article || article.image) continue;
+
+    const img = await resolveImage(article);
     if (img) {
       article.image = img;
+      // Patch the DOM card without full re-render
       const card = document.querySelector(`[data-article-id="${articleId}"]`);
       if (card) {
         const ph = card.querySelector('.card-image-placeholder');
         if (ph) {
           const im = document.createElement('img');
           im.src = img; im.alt = ''; im.loading = 'lazy';
-          im.onerror = () => { im.remove(); };
+          im.onerror = () => im.remove();
           ph.replaceWith(im);
         }
       }
     }
-    await new Promise(r => setTimeout(r, 700));
+    // Stagger requests to be polite to free APIs
+    await new Promise(r => setTimeout(r, 800));
   }
   ogWorkerActive = false;
-  if (ogQueue.size > 0) setTimeout(processOgQueue, 1500);
+  if (ogQueue.size > 0) setTimeout(processOgQueue, 2000);
 }
 
 const ogObserver = new IntersectionObserver(entries => {
@@ -897,6 +983,49 @@ function markAllRead() {
   toast('Tutto segnato come letto', 'info');
 }
 
+function resetApp() {
+  if (!confirm('⚠️ Reset completo FeedFlow?\n\nVerranno eliminati:\n• Tutti i feed\n• Tutti gli articoli\n• Articoli letti\n• Cache immagini\n• Impostazioni\n\nVerranno mantenuti:\n• I tuoi Preferiti ★\n\nContinuare?')) return;
+
+  // Save favorites before clearing
+  const savedFavorites = new Set(state.favorites);
+  const savedFavArticles = state.articles.filter(a => savedFavorites.has(a.id));
+
+  // Clear all localStorage except favorites
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('ff_'));
+  keys.forEach(k => localStorage.removeItem(k));
+
+  // Clear image cache
+  Object.keys(imageCache).forEach(k => delete imageCache[k]);
+  localStorage.removeItem('ff_img_cache');
+
+  // Reset state to defaults, restore favorites
+  state.feeds         = [...DEFAULT_FEEDS];
+  state.articles      = savedFavArticles;
+  state.favorites     = savedFavorites;
+  state.readArticles  = new Set();
+  state.activeFeed    = 'all';
+  state.activeCategory= 'all';
+  state.activeTab     = 'feeds';
+  state.searchQuery   = '';
+  state.sortBy        = 'date';
+  state.showUnreadOnly= false;
+  state.refreshInterval = 15;
+  state.redisUrl      = '';
+  state.redisToken    = '';
+  state.useRedis      = false;
+  state.lastSync      = null;
+
+  Storage.save();
+  renderFeeds();
+  renderCategoryChips();
+  renderSettingsPanel();
+  switchTab('feeds');
+  toast(`App resettata — ${savedFavorites.size} preferiti mantenuti`, 'success');
+
+  // Reload feeds in background
+  setTimeout(() => refreshAll(true), 800);
+}
+
 // ─── Add / Edit Feed ──────────────────────────────────────────────────────────
 let editingFeedId = null;
 
@@ -1200,7 +1329,7 @@ async function init() {
 Object.assign(window, {
   openAddFeedModal, openEditFeedModal, saveFeed, removeFeedFromModal, removeFeed,
   toggleFavorite, toggleFavoriteById, toggleRead, openExternal, filterByCategory,
-  fillFeedPreset, importDB, markAllRead, saveSettings, refreshAll,
+  fillFeedPreset, importDB, markAllRead, resetApp, saveSettings, refreshAll,
   openDiscoverModal, filterDiscover, renderDiscoverGrid, quickAddFeed,
   handleImgError, Storage, state,
 });
