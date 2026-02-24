@@ -56,11 +56,14 @@
     <div class="category-chips" id="category-chips"></div>
 
     <!-- FEEDS section -->
-    <div id="sidebar-feeds-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;">
-      <div class="sidebar-section">
+    <div id="sidebar-feeds-section" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
+      <!-- Section header - fixed, never scrolls -->
+      <div class="sidebar-section" style="flex-shrink:0;">
         <div class="sidebar-section-title">I miei feed</div>
       </div>
+      <!-- Feed list - this is the ONLY thing that scrolls -->
       <div id="feeds-list"></div>
+      <!-- Footer - fixed at bottom -->
       <div class="sidebar-footer">
         <button class="sidebar-footer-btn" onclick="openAddFeedModal()">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -233,18 +236,27 @@
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     deferredPrompt = e;
+    // Avoid duplicating the button
+    if (document.getElementById('pwa-install-btn')) return;
     const btn = document.createElement('button');
+    btn.id = 'pwa-install-btn';
     btn.className = 'header-btn';
     btn.title = 'Installa app';
     btn.style.color = 'var(--gold)';
     btn.innerHTML = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
     btn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') btn.remove();
       deferredPrompt = null;
+      btn.remove(); // always remove after interaction
     });
     document.getElementById('header').insertBefore(btn, document.getElementById('refresh-btn'));
+  });
+  // If installed, remove the button
+  window.addEventListener('appinstalled', () => {
+    document.getElementById('pwa-install-btn')?.remove();
+    deferredPrompt = null;
   });
 </script>
 </body>

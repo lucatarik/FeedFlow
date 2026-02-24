@@ -141,13 +141,14 @@ body {
   padding: 0 4px;
 }
 
-/* Feed list — MUST scroll */
+/* Feed list — fills remaining space, scrolls independently */
 #feeds-list {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 12px;
-  min-height: 0; /* critical for flex child scrolling */
+  padding: 6px 10px 4px;
+  min-height: 0;           /* THE key for flex+scroll to work */
+  -webkit-overflow-scrolling: touch;
 }
 
 .feed-item {
@@ -224,14 +225,16 @@ body {
 .feed-action-btn:hover { background: var(--bg4); color: var(--text); }
 .feed-action-btn.danger:hover { color: var(--red); }
 
-/* Categories chips */
+/* Categories chips — fixed, never scrolls with feeds */
 .category-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 5px;
+  padding: 8px 12px 10px;
   border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  flex-shrink: 0;          /* never compress */
+  max-height: 160px;       /* cap so it doesn't eat sidebar */
+  overflow-y: auto;
 }
 
 .cat-chip {
@@ -255,13 +258,13 @@ body {
 
 .cat-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
-/* Sidebar bottom */
+/* Sidebar bottom — always pinned, never scrolls */
 .sidebar-footer {
   padding: 10px 12px;
   border-top: 1px solid var(--border);
   display: flex;
   gap: 6px;
-  flex-shrink: 0;
+  flex-shrink: 0;          /* never compress */
 }
 
 .sidebar-footer-btn {
@@ -940,9 +943,8 @@ body {
   #status-bar { padding: 0 12px; font-size: 10px; gap: 8px; }
   #last-sync { display: none; }
 
-  /* Category chips in sidebar horizontal scroll on mobile */
-  .category-chips { flex-wrap: nowrap; overflow-x: auto; padding: 8px; }
-  .category-chips::-webkit-scrollbar { display: none; }
+  /* Category chips in sidebar: keep wrapping on mobile too */
+  .category-chips { max-height: 130px; overflow-y: auto; }
   .cat-chip { flex-shrink: 0; }
 
   /* Modals full screen on mobile */

@@ -907,7 +907,14 @@ function showFeedModal(feed) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay'; overlay.id = 'feed-modal-overlay';
   const catOpts = [...Object.keys(CATEGORIES), 'Altro'].map(c => `<option value="${c}" ${feed.category === c ? 'selected':''}>${c}</option>`).join('');
-  const presetHtml = Object.entries({ 'AI e LLM': FEED_CATALOG['AI e LLM'].slice(0,4), 'Programmazione': FEED_CATALOG['Programmazione'].slice(0,4), 'Geek': FEED_CATALOG['Geek'].slice(0,3), 'Cinema': FEED_CATALOG['Cinema'].slice(0,3), 'Modelli 3D': FEED_CATALOG['Modelli 3D'].slice(0,3) }).map(([group, feeds]) => `
+  const presetHtml = Object.entries({
+    'AI e LLM':       (FEED_CATALOG['AI e LLM']       || []).slice(0, 4),
+    'Programmazione': (FEED_CATALOG['Programmazione']  || []).slice(0, 4),
+    'Geek':           (FEED_CATALOG['Geek']            || []).slice(0, 3),
+    'Cinema':         (FEED_CATALOG['Cinema']          || []).slice(0, 3),
+    'Stampa 3D':      (FEED_CATALOG['Stampa 3D']       || []).slice(0, 3),
+    'Videogiochi':    (FEED_CATALOG['Videogiochi']     || []).slice(0, 3),
+  }).filter(([, feeds]) => feeds.length > 0).map(([group, feeds]) => `
     <div class="form-group">
       <div class="form-label" style="color:${CAT_COLORS[group]||'var(--text3)'}">■ ${group}</div>
       <div class="preset-chips">${feeds.map(f => `<span class="preset-chip" onclick="fillFeedPreset('${escapeAttr(f.name)}','${escapeAttr(f.url)}')">${f.name}</span>`).join('')}</div>
